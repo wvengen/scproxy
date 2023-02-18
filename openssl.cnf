@@ -1,0 +1,72 @@
+# basic OpenSSL CA config
+
+HOME = .
+
+[ ca ]
+default_ca = CA_default
+
+
+[ CA_default ]
+dir              = ./certs
+serial           = $dir/serial
+database         = $dir/index.txt
+new_certs_dir    = $dir/newcerts
+certificate      = $dir/root.crt
+private_key      = $dir/root.key
+default_days     = 1094
+default_md       = sha512
+preserve         = no                     # whether keep DN ordering
+email_in_dn      = no
+nameopt          = default_ca
+certopt          = default_ca
+policy           = policy_match
+
+crlnumber        = $dir/crlnumber         # the current crl number
+crl              = $dir/crl.pem           # The current CRL
+default_crl_days = 30                     # how long before next CRL
+
+RANDFILE         = $dir/.rand             # private random number file
+copy_extensions  = copy                   # Honor extensions requested of us
+
+
+[ req ]
+default_bits       = 4096                 # Size of keys
+default_keyfile    = key.pem              # name of generated keys
+default_md         = sha256               # message digest algorithm
+string_mask        = utf8only             # permitted characters
+distinguished_name = req_distinguished_name
+req_extensions     = v3_req
+
+
+[ req_distinguished_name ]
+commonName_default              = ${ENV::SUBJECT_ALT_NAME}
+
+[ v3_req ]
+basicConstraints     = critical,CA:FALSE
+subjectKeyIdentifier = hash
+keyUsage             = nonRepudiation, digitalSignature, keyEncipherment, dataEncipherment
+extendedKeyUsage     = critical,serverAuth, clientAuth
+subjectAltName       = critical,DNS:${ENV::SUBJECT_ALT_NAME},DNS:www.${ENV::SUBJECT_ALT_NAME},IP:${ENV::SUBJECT_ALT_IP},email:move
+
+
+[ v3_ca ]
+basicConstraints       = critical,CA:TRUE
+subjectKeyIdentifier   = hash
+authorityKeyIdentifier = keyid:always,issuer:always
+keyUsage               = cRLSign, keyCertSign
+issuerAltName          = issuer:copy
+subjectAltName         = critical,DNS:${ENV::SUBJECT_ALT_NAME},email:move
+
+
+[ policy_match ]
+countryName            = optional
+stateOrProvinceName    = optional
+organizationName       = optional
+organizationalUnitName = optional
+commonName             = supplied
+emailAddress           = optional
+
+
+[ crl_ext ]    # CRL extensions.
+issuerAltName          = issuer:copy
+authorityKeyIdentifier = keyid:always,issuer:always
