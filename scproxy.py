@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
+#
+# Unofficial Buypass SCProxy implementation
+#
+# Only supports smartcard login, not signing or other use-cases.
+#
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import ssl
 import json
+import random
 from urllib.parse import unquote
 
 import smartcard.System
@@ -12,8 +18,8 @@ class ScproxyHandler(BaseHTTPRequestHandler):
 
     CORS_ORIGIN = 'https://secure.buypass.no'
 
-    connections = {}
     sessions = {}
+    refs = {}
 
     def do_GET(self):
         self.send_404()
@@ -59,31 +65,17 @@ class ScproxyHandler(BaseHTTPRequestHandler):
         content_length = int(self.headers.get('Content-Length', 0))
         return json.loads(self.rfile.read(content_length))
 
-    def get_connection(self, name):
-        conn = self.connections.get(name)
-        if not conn:
-            matching_readers = [r for r in smartcard.System.readers() if r.name == name]
-            conn = matching_readers[0].createConnection() # TODO handle disappeared reader
-            self.connections[name] = conn
-            conn.connect()
-        return conn
-
     def get_session(self, name, sid):
         session = self.sessions.get(sid)
         if not session:
-            session = smartcard.Session(self.get_connection(name))
+            session = smartcard.Session(name)
             self.sessions[sid] = session
         return session
 
     def close_sessions(self):
-        for name, s in self.sessions:
+        for s in self.sessions.values():
             s.close()
         self.sessions = {}
-
-    def close_connections(self):
-        for name, c in self.connections:
-            c.disconnect()
-        self.connections = {}
 
     #
     # Request handlers (see do_POST)
@@ -91,35 +83,87 @@ class ScproxyHandler(BaseHTTPRequestHandler):
 
     def handle_version(self):
         self.send_json({ 'version': '1.4.1.16', 'port': 31505 })
-        #self.send_json({ 'version': '1.0', 'port': 31505 })
 
     def handle_list(self):
-        # status must be 301 or 302 to be recognized by Buypass
-        # TODO proper status
-        readers = [{ 'cardstatus': 301, 'name': r.name } for r in smartcard.System.readers()]
-        self.send_json({ 'readers': readers, 'errorcode': 0 })
+        # status must be 301 (no card) or 302 (card present) to be recognized by Buypass
+        # status must be >= 302 for Buypass pin-change app
+        # TODO proper status based on card reader
+        readers = [{ 'cardstatus': 302, 'name': r.name } for r in smartcard.System.readers()]
+        self.send_json({ 'readers': readers, 'errorcode': 0, 'errordetail': 0 })
 
     def handle_getref(self):
-        self.send_404() # no idea what this is for, yet
-        # self.send_json({ 'ref': None, 'data': None })
+        ref = random.randrange(0,10**8)
+        data = [random.randrange(0x100) for r in range(16)]
+        # TODO drop old entries
+        self.refs[ref] = data
+        self.send_json({ 'ref': ref, 'data': toHexString(data).replace(' ', '') })
 
     def handle_disconnect(self):
-        # only called when client version <= 1.3
-        self.close_sessions()
-        self.close_connections()
-        self.send_response(200)
-        self.send_headers()
+        # only called when client version >= 1.3
+        body = self.get_json_body()
+        sid = body['session']
+        s = self.sessions.get(sid)
+        if s:
+            s.close()
+            self.sessions.pop(sid)
+            self.send_response(200)
+            self.end_headers()
+        else:
+            self.send_404()
 
     def handle_apdu(self, reader):
         body = self.get_json_body()
         session = self.get_session(reader, body['session'])
         responses = []
         for apdu in body['apducommands']:
-            print('tx', apdu)
-            response, sw1, sw2 = session.sendCommandAPDU(toBytes(apdu['apdu']))
-            print('rx', response, sw1, sw2)
-            responses.append({ 'apdu': toHexString(sw1) + toHexString(sw2) })
-        self.send_json({ 'apduresponses': responses })
+            apduBytes = toBytes(apdu['apdu'])
+
+            # special command to handle PIN entry, we decrypt PIN and send a different command
+            #   FF FF 01 04        - indicator about special packet
+            #   xx xx xx xx        - ref to unscramble pin with
+            #   05                 - length of apdu prefix (guess)
+            #   04                 - length of pin (guess)
+            #   A0 20 00 82 08     - apdu prefix
+            #   xx xx xx xx        - scrambled pin
+            #   FF FF FF FF        - placeholder (for longer pins)
+            #   FF FF FF FF        - padding?
+            if apduBytes[0:4] == [0xff, 0xff, 0x01, 0x04]:
+                # TODO handle length bytes, to support other APDUs and PIN lengths
+                if apduBytes[8] != 5:
+                    print('PIN verification only supported with 5-byte APDU prefix')
+                    self.send_404()
+                    return
+                if apduBytes[9] != 4:
+                    print('PIN verification only supported with 4-digit PIN')
+                    self.send_404()
+                    return
+                # unscramble pin with ref
+                ref = (((apduBytes[4] << 8) + apduBytes[5] << 8) + apduBytes[6] << 8) + apduBytes[7]
+                refdata = self.refs[ref] # TODO handle missing ref
+                pin = apduBytes[15:19]
+                pin = [d ^ refdata[i] ^ refdata[i+len(pin)] for i, d in enumerate(pin)]
+                # replace with real apdu
+                apduBytes = apduBytes[10:15] + pin + [0xff, 0xff, 0xff, 0xff] + [0xff, 0xff, 0xff, 0xff]
+
+            response, sw1, sw2 = session.sendCommandAPDU(apduBytes)
+
+            # status indicates we need another request to fech data
+            if sw1 == 0x61:
+                response, sx1, sx2 = session.sendCommandAPDU([0x00, 0xc0, 0x00, 0x00, sw2])
+                data = response
+            # special case: response of two bytes, add status to bytes
+            # not sure why this is needed, but it makes the responses match the official client
+            elif response and apduBytes[-1] == 2:
+                data = [*response, sw1, sw2]
+            # response
+            elif response:
+                data = response
+            # no response, just status
+            else:
+                data = [sw1, sw2]
+
+            responses.append({ 'apdu': toHexString(data).replace(' ', '') })
+        self.send_json({ 'apduresponses': responses, 'errorcode': 0, 'errordetail': 0 })
 
 if __name__ == '__main__':
     httpd = HTTPServer(('localhost', 31505), ScproxyHandler)
@@ -131,7 +175,7 @@ if __name__ == '__main__':
         httpd.serve_forever()
     except KeyboardInterrupt:
         pass
-    
-    # TODO close sessions and disconnect readers
+
+    # TODO close sessions
     httpd.server_close()
 
