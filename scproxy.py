@@ -77,6 +77,33 @@ class ScproxyHandler(BaseHTTPRequestHandler):
             s.close()
         self.sessions = {}
 
+    def unscramble_apdu(self, bytesIn):
+        # Example incoming APDU:
+        #   FF FF 01 04        - indicator about special packet
+        #   xx xx xx xx        - ref to unscramble pin with
+        #   05                 - length of apdu prefix (guess)
+        #   04                 - length of pin (guess)
+        #   A0 20 00 82 08     - apdu prefix
+        #   xx xx xx xx        - scrambled pin
+        #   FF FF FF FF        - placeholder (for longer pins)
+        #   FF FF FF FF        - padding?
+        bytesOut = []
+        # lookup ref for data to unscramble
+        ref = (((bytesIn[4] << 8) + bytesIn[5] << 8) + bytesIn[6] << 8) + bytesIn[7]
+        refdata = self.refs[ref] # TODO handle missing ref
+        # data lengths
+        prefixLen = bytesIn[8]
+        pinLen = bytesIn[9]
+        # prefix
+        bytesOut += bytesIn[10:(10+prefixLen)]
+        # unscramble pin
+        pin = bytesIn[(10+prefixLen):(10+prefixLen+pinLen)]
+        pin = [d ^ refdata[i] ^ refdata[i+len(pin)] for i, d in enumerate(pin)]
+        bytesOut += pin
+        # suffix
+        bytesOut += bytesIn[(10+prefixLen+pinLen):]
+        return bytesOut
+
     #
     # Request handlers (see do_POST)
     #
@@ -119,31 +146,8 @@ class ScproxyHandler(BaseHTTPRequestHandler):
             apduBytes = toBytes(apdu['apdu'])
 
             # special command to handle PIN entry, we decrypt PIN and send a different command
-            #   FF FF 01 04        - indicator about special packet
-            #   xx xx xx xx        - ref to unscramble pin with
-            #   05                 - length of apdu prefix (guess)
-            #   04                 - length of pin (guess)
-            #   A0 20 00 82 08     - apdu prefix
-            #   xx xx xx xx        - scrambled pin
-            #   FF FF FF FF        - placeholder (for longer pins)
-            #   FF FF FF FF        - padding?
             if apduBytes[0:4] == [0xff, 0xff, 0x01, 0x04]:
-                # TODO handle length bytes, to support other APDUs and PIN lengths
-                if apduBytes[8] != 5:
-                    print('PIN verification only supported with 5-byte APDU prefix')
-                    self.send_404()
-                    return
-                if apduBytes[9] != 4:
-                    print('PIN verification only supported with 4-digit PIN')
-                    self.send_404()
-                    return
-                # unscramble pin with ref
-                ref = (((apduBytes[4] << 8) + apduBytes[5] << 8) + apduBytes[6] << 8) + apduBytes[7]
-                refdata = self.refs[ref] # TODO handle missing ref
-                pin = apduBytes[15:19]
-                pin = [d ^ refdata[i] ^ refdata[i+len(pin)] for i, d in enumerate(pin)]
-                # replace with real apdu
-                apduBytes = apduBytes[10:15] + pin + [0xff, 0xff, 0xff, 0xff] + [0xff, 0xff, 0xff, 0xff]
+                apduBytes = self.unscramble_apdu(apduBytes)
 
             response, sw1, sw2 = session.sendCommandAPDU(apduBytes)
 
@@ -152,7 +156,7 @@ class ScproxyHandler(BaseHTTPRequestHandler):
                 response, sx1, sx2 = session.sendCommandAPDU([0x00, 0xc0, 0x00, 0x00, sw2])
                 data = response
             # special case: response of two bytes, add status to bytes
-            # not sure why this is needed, but it makes the responses match the official client
+            # not sure why this is needed, but it makes the responses match the official proxy
             elif response and apduBytes[-1] == 2:
                 data = [*response, sw1, sw2]
             # response
