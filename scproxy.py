@@ -119,7 +119,7 @@ class ScproxyHandler(BaseHTTPRequestHandler):
         self.send_json({ 'readers': readers, 'errorcode': 0, 'errordetail': 0 })
 
     def handle_getref(self):
-        ref = random.randrange(0,0x7fffffff) # 4 bytes, except highest bit to avoid signed/unsigned issues
+        ref = random.randrange(0,0x80000000) # 4 bytes, except highest bit to avoid signed/unsigned issues
         data = [random.randrange(0x100) for r in range(16)]
         # TODO drop old entries
         self.refs[ref] = data
