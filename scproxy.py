@@ -41,7 +41,7 @@ class ScproxyHandler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(200, 'ok')
         self.send_header('Access-Control-Allow-Methods', 'OPTIONS, POST')
-        self.send_header("Access-Control-Allow-Headers", 'Content-Type')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
         self.end_headers()
 
     def end_headers(self):
