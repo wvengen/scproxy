@@ -114,6 +114,15 @@ When a suitable card is inserted, this would return an OK response:
 }
 ```
 
+## Testing
+
+To play around with the API, you can use [curl](https://curl.se) e.g. as follows:
+
+```sh
+curl --insecure -H 'Sec-Fetch-Mode: cors' -H 'Origin: https://secure.buypass.no' \
+     --data-raw '' https://127.0.0.1:31505/scard/list/
+```
+
 # License
 
 This program is licensed under the [GNU GPL v3 or later](LICENSE.md).

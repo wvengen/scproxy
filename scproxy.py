@@ -16,15 +16,23 @@ from smartcard.util import toHexString, toBytes
 
 class ScproxyHandler(BaseHTTPRequestHandler):
 
+    PORT = 31505
+    VERSION = '1.4.1.16'
     CORS_ORIGIN = 'https://secure.buypass.no'
 
     sessions = {}
     refs = {}
 
+    server_version = 'SCProxy/' + VERSION
+
     def do_GET(self):
+        if not self.security_check(): return
+
         self.send_404()
 
     def do_POST(self):
+        if not self.security_check(): return
+
         if self.path == '/scard/version/':
             self.handle_version()
         elif self.path == '/scard/list/':
@@ -39,6 +47,8 @@ class ScproxyHandler(BaseHTTPRequestHandler):
             self.send_404()
 
     def do_OPTIONS(self):
+        if not self.security_check(): return
+
         self.send_response(200, 'ok')
         self.send_header('Access-Control-Allow-Methods', 'OPTIONS, POST')
         self.send_header('Access-Control-Allow-Headers', 'Content-Type')
@@ -52,8 +62,24 @@ class ScproxyHandler(BaseHTTPRequestHandler):
     # Helper methods
     #
 
+    def security_check(self):
+        # security checks to avoid e.g. forms accessing this
+        if self.headers['Sec-Fetch-Mode'] != 'cors':
+            self.send_403()
+            return False
+        if self.headers['Origin'] != self.CORS_ORIGIN:
+            self.send_403()
+            return False
+        else:
+            return True
+
     def send_404(self):
         self.send_response(404)
+        self.end_headers()
+
+    def send_403(self):
+        self.send_response(403)
+        self.end_headers()
 
     def send_json(self, data):
         self.send_response(200)
@@ -109,7 +135,7 @@ class ScproxyHandler(BaseHTTPRequestHandler):
     #
 
     def handle_version(self):
-        self.send_json({ 'version': '1.4.1.16', 'port': 31505 })
+        self.send_json({ 'version': self.VERSION, 'port': self.PORT })
 
     def handle_list(self):
         # status must be 301 (no card) or 302 (card present) to be recognized by Buypass
@@ -170,7 +196,7 @@ class ScproxyHandler(BaseHTTPRequestHandler):
         self.send_json({ 'apduresponses': responses, 'errorcode': 0, 'errordetail': 0 })
 
 if __name__ == '__main__':
-    httpd = HTTPServer(('localhost', 31505), ScproxyHandler)
+    httpd = HTTPServer(('localhost', ScproxyHandler.PORT), ScproxyHandler)
     sslctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     sslctx.check_hostname = False
     sslctx.load_cert_chain(certfile='certs/scproxy.chain', keyfile='certs/scproxy.key')
