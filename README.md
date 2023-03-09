@@ -60,9 +60,11 @@ But it allows one to log into websites with a Buypass smartcard.
 
 2. In the user-agent switcher, select the _Windows_ platform.
 
-3. Visit the website you want to login with using Buypass smartcard, and do so.
+3. Make sure you smartcard reader is connected and the Buypass card inserted.
 
-4. At the end, you can switch back to the terminal and press <kbd>Ctrl-C</kbd>
+4. Visit the website you want to login with using Buypass smartcard, and do so.
+
+5. At the end, you can switch back to the terminal and press <kbd>Ctrl-C</kbd>
    to terminate SCProxy.
 
 # Links
