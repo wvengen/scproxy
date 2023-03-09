@@ -180,6 +180,6 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         pass
 
-    # TODO close sessions
+    # connections are closed by smartcard's finalizers
     httpd.server_close()
 
