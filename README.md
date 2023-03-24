@@ -67,6 +67,20 @@ But it allows one to log into websites with a Buypass smartcard.
 5. At the end, you can switch back to the terminal and press <kbd>Ctrl-C</kbd>
    to terminate SCProxy.
 
+
+## Socket activation
+
+This program can also be used with systemd socket activation (based on [this](https://github.com/Spindel/systemd-socketactivation)).
+
+TODO: describe how
+
+To test this, you can run
+
+```sh
+systemd-socket-activate -l 31505 python3 scproxy.py
+```
+
+
 # Links
 
 - [I'm not the only one](https://www.diskusjon.no/topic/1874608-buypass-med-kortleser-i-ubuntu/)

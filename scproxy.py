@@ -5,9 +5,12 @@
 # Only supports smartcard login, not signing or other use-cases.
 #
 from http.server import HTTPServer, BaseHTTPRequestHandler
+import os
 import ssl
 import json
 import random
+import socket
+import time
 from urllib.parse import unquote
 
 import smartcard.System
@@ -195,17 +198,47 @@ class ScproxyHandler(BaseHTTPRequestHandler):
             responses.append({ 'apdu': toHexString(data).replace(' ', '') })
         self.send_json({ 'apduresponses': responses, 'errorcode': 0, 'errordetail': 0 })
 
-if __name__ == '__main__':
-    httpd = HTTPServer(('localhost', ScproxyHandler.PORT), ScproxyHandler)
-    sslctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    sslctx.check_hostname = False
-    sslctx.load_cert_chain(certfile='certs/scproxy.chain', keyfile='certs/scproxy.key')
-    httpd.socket = sslctx.wrap_socket(httpd.socket, server_side=True)
-    try:
-        httpd.serve_forever()
-    except KeyboardInterrupt:
-        pass
 
-    # connections are closed by smartcard's finalizers
-    httpd.server_close()
+if __name__ == '__main__':
+
+    def get_systemd_socket():
+        """Get socket from systemd with socket activation"""
+        SYSTEMD_FIRST_SOCKET_FD = 3
+        return socket.fromfd(SYSTEMD_FIRST_SOCKET_FD, HTTPServer.address_family, HTTPServer.socket_type)
+
+    def setup_ssl(httpd):
+        """Setup SSL for HTTP server"""
+        sslctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        sslctx.check_hostname = False
+        sslctx.load_cert_chain(certfile='certs/scproxy.chain', keyfile='certs/scproxy.key')
+        httpd.socket = sslctx.wrap_socket(httpd.socket, server_side=True)
+
+
+    if os.environ.get('LISTEN_PID', None) == str(os.getpid()):
+        # systemd socket activation
+        httpd = HTTPServer(('localhost', ScproxyHandler.PORT), ScproxyHandler, bind_and_activate=False)
+        httpd.timeout = 1
+        httpd.socket = get_systemd_socket()
+        httpd.server_activate()
+        setup_ssl(httpd)
+
+        SHUTDOWN_DELAY = 60
+        start = time.monotonic()
+        while time.monotonic() < start + SHUTDOWN_DELAY:
+            httpd.handle_request()
+
+        # connections are closed by smartcard's finalizers
+        httpd.server_close()
+
+    else:
+        # regular http server
+        httpd = HTTPServer(('localhost', ScproxyHandler.PORT), ScproxyHandler)
+        setup_ssl(httpd)
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            pass
+
+        # connections are closed by smartcard's finalizers
+        httpd.server_close()
 
