@@ -206,13 +206,21 @@ if __name__ == '__main__':
         SYSTEMD_FIRST_SOCKET_FD = 3
         return socket.fromfd(SYSTEMD_FIRST_SOCKET_FD, HTTPServer.address_family, HTTPServer.socket_type)
 
-    def setup_ssl(httpd):
+    def setup_ssl(httpd, datadir):
         """Setup SSL for HTTP server"""
         sslctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         sslctx.check_hostname = False
-        sslctx.load_cert_chain(certfile='certs/scproxy.chain', keyfile='certs/scproxy.key')
+        sslctx.load_cert_chain(certfile=datadir+'/certs/scproxy.chain', keyfile=datadir+'/certs/scproxy.key')
         httpd.socket = sslctx.wrap_socket(httpd.socket, server_side=True)
 
+    # figure out where the certificates are located
+    datadir = None
+    for prefix in ['/var/lib/scproxy', '.']:
+        if os.path.isfile(prefix + '/certs/scproxy.crt'):
+            datadir = prefix
+            break
+    if not datadir:
+        raise Exception('Could not find certificate, did you generate it?')
 
     if os.environ.get('LISTEN_PID', None) == str(os.getpid()):
         # systemd socket activation
@@ -220,7 +228,7 @@ if __name__ == '__main__':
         httpd.timeout = 1
         httpd.socket = get_systemd_socket()
         httpd.server_activate()
-        setup_ssl(httpd)
+        setup_ssl(httpd, datadir)
 
         SHUTDOWN_DELAY = 60
         start = time.monotonic()
@@ -233,7 +241,7 @@ if __name__ == '__main__':
     else:
         # regular http server
         httpd = HTTPServer(('localhost', ScproxyHandler.PORT), ScproxyHandler)
-        setup_ssl(httpd)
+        setup_ssl(httpd, datadir)
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:

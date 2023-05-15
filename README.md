@@ -47,6 +47,15 @@ But it allows one to log into websites with a Buypass smartcard.
 5. Add a user-agent switcher to your web browser, you'll need it later.
 
 
+To let this work out of the box, you may try running
+
+```
+make && sudo make install
+```
+
+With a bit of luck, this installs the program on your system, and sets it
+up to work with systemd using socket activation.
+
 ## Use
 
 1. Start SCProxy.
@@ -58,6 +67,8 @@ But it allows one to log into websites with a Buypass smartcard.
    python3 scproxy.py
    ```
 
+   If you've run `make install` as described above, this is done automatically.
+
 2. In the user-agent switcher, select the _Windows_ platform.
 
 3. Make sure you smartcard reader is connected and the Buypass card inserted.
@@ -65,16 +76,16 @@ But it allows one to log into websites with a Buypass smartcard.
 4. Visit the website you want to login with using Buypass smartcard, and do so.
 
 5. At the end, you can switch back to the terminal and press <kbd>Ctrl-C</kbd>
-   to terminate SCProxy.
+   to terminate SCProxy. (no need if you ran `make install`)
 
 
 ## Socket activation
 
 This program can also be used with systemd socket activation (based on [this](https://github.com/Spindel/systemd-socketactivation)).
 
-TODO: describe how
+See `system/` for the unit files. The `Makefile` should setup this all up.
 
-To test this, you can run
+To test socket activation, you can run
 
 ```sh
 systemd-socket-activate -l 31505 python3 scproxy.py

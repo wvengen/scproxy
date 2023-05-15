@@ -1,0 +1,9 @@
+[Unit]
+Description=Buypass SCProxy (unofficial)
+Documentation=https://github.com/wvengen/scproxy
+After=network.target
+
+[Service]
+ExecStart=$(BINDIR)/scproxy
+User=$(RUNUSER)
+PrivateUsers=true

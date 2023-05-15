@@ -1,5 +1,6 @@
 # SCProxy
 /certs
+/system/scproxy.service
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

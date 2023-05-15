@@ -1,0 +1,8 @@
+[Unit]
+Description=Buypass SCProxy (unofficial) Socket
+
+[Socket]
+ListenStream=127.0.0.1:31505
+
+[Install]
+WantedBy=sockets.target
