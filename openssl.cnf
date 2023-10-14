@@ -13,7 +13,7 @@ database         = $dir/index.txt
 new_certs_dir    = $dir/newcerts
 certificate      = $dir/root.crt
 private_key      = $dir/root.key
-default_days     = 1094
+default_days     = 3650
 default_md       = sha512
 preserve         = no                     # whether keep DN ordering
 email_in_dn      = no
@@ -23,13 +23,14 @@ policy           = policy_match
 
 crlnumber        = $dir/crlnumber         # the current crl number
 crl              = $dir/crl.pem           # The current CRL
-default_crl_days = 30                     # how long before next CRL
+default_crl_days = 3650                   # how long before next CRL
 
 RANDFILE         = $dir/.rand             # private random number file
 copy_extensions  = copy                   # Honor extensions requested of us
 
 
 [ req ]
+default_days       = 3650
 default_bits       = 4096                 # Size of keys
 default_keyfile    = key.pem              # name of generated keys
 default_md         = sha256               # message digest algorithm
