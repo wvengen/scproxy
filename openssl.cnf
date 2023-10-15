@@ -30,7 +30,7 @@ copy_extensions  = copy                   # Honor extensions requested of us
 
 
 [ req ]
-default_days       = 3650
+default_days       = 3650                 # May not work, so also on command-line
 default_bits       = 4096                 # Size of keys
 default_keyfile    = key.pem              # name of generated keys
 default_md         = sha256               # message digest algorithm
