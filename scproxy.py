@@ -20,7 +20,7 @@ from smartcard.util import toHexString, toBytes
 class ScproxyHandler(BaseHTTPRequestHandler):
 
     PORT = 31505
-    VERSION = '1.4.1.16'
+    VERSION = '1.5.2'
     CORS_ORIGIN = 'https://secure.buypass.no'
 
     sessions = {}
@@ -53,8 +53,8 @@ class ScproxyHandler(BaseHTTPRequestHandler):
         if not self.security_check(): return
 
         self.send_response(200, 'ok')
-        self.send_header('Access-Control-Allow-Methods', 'OPTIONS, POST')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.send_header('Access-Control-Allow-Methods', 'POST')
+        self.send_header('Access-Control-Allow-Private-Network', 'true')
         self.end_headers()
 
     def end_headers(self):
