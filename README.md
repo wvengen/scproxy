@@ -7,7 +7,8 @@ for Windows and Mac OS, but not for Linux.
 
 This program is a basic attempt to get it working on Linux. It's not very
 polished, and there are likely to be many corner-cases that aren't handled.
-But it allows one to log into websites with a Buypass smartcard.
+But it allows one to log into websites with a Buypass smartcard, and to
+change the card's PIN.
 
 ## Install
 
