@@ -172,31 +172,38 @@ class ScproxyHandler(BaseHTTPRequestHandler):
         session = self.get_session(reader, body['session'])
         responses = []
         for apdu in body['apducommands']:
-            apduBytes = toBytes(apdu['apdu'])
-
-            # special command to handle PIN entry, we decrypt PIN and send a different command
-            if apduBytes[0:4] == [0xff, 0xff, 0x01, 0x04]:
-                apduBytes = self.unscramble_apdu(apduBytes)
-
-            response, sw1, sw2 = session.sendCommandAPDU(apduBytes)
-
-            # status indicates we need another request to fech data
-            if sw1 == 0x61:
-                response, sx1, sx2 = session.sendCommandAPDU([0x00, 0xc0, 0x00, 0x00, sw2])
-                data = response
-            # special case: response of two bytes, add status to bytes
-            # not sure why this is needed, but it makes the responses match the official proxy
-            elif response and apduBytes[-1] == 2:
-                data = [*response, sw1, sw2]
-            # response
-            elif response:
-                data = response
-            # no response, just status
-            else:
-                data = [sw1, sw2]
-
+            data = self.handle_apdu_command(session, toBytes(apdu['apdu']))
             responses.append({ 'apdu': toHexString(data).replace(' ', '') })
         self.send_json({ 'apduresponses': responses, 'errorcode': 0, 'errordetail': 0 })
+
+    def handle_apdu_command(self, session, apduBytes):
+
+        # special command to handle PIN entry, we decrypt PIN and send a different command
+        if apduBytes[0:4] == [0xff, 0xff, 0x01, 0x04]:
+            apduBytes = self.unscramble_apdu(apduBytes)
+
+        response, sw1, sw2 = session.sendCommandAPDU(apduBytes)
+
+        # status indicates we need another request to fetch data
+        if sw1 == 0x61:
+            response, sx1, sx2 = session.sendCommandAPDU([0x00, 0xc0, 0x00, 0x00, sw2])
+            data = response
+        # special case: response of two bytes, add status to bytes
+        # not sure why this is needed, but it makes the responses match the official proxy
+        elif response and apduBytes[-1] == 2:
+            data = [*response, sw1, sw2]
+        # response
+        elif response:
+            data = response
+        # no response, just status
+        else:
+            data = [sw1, sw2]
+
+        # in case of 'class not supported', fake success (may help in some cases)
+        # don't enable this by default, it may sollicitate strange behaviour
+        #if data == [0x6e, 0x00]: data = [0x90, 0x00]
+
+        return data
 
 
 if __name__ == '__main__':
